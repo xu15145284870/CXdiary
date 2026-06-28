@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html><head><meta charset="UTF-8"></head><body>
+  <h3>打开此页面自动生成并下载图标</h3>
+  <canvas id="c" width="512" height="512"></canvas>
+  <script>
+    const canvas = document.getElementById('c');
+    const ctx = canvas.getContext('2d');
+    // 背景
+    const bg = ctx.createLinearGradient(0, 0, 512, 512);
+    bg.addColorStop(0, '#F5D6B3');
+    bg.addColorStop(1, '#E8916A');
+    ctx.fillStyle = bg;
+    ctx.beginPath();
+    ctx.roundRect(60, 60, 392, 392, 80);
+    ctx.fill();
+    // 文字
+    ctx.fillStyle = '#fff';
+    ctx.font = 'bold 180px sans-serif';
+    ctx.textAlign = 'center';
+    ctx.textBaseline = 'middle';
+    ctx.fillText('🧅', 180, 240);
+    ctx.fillText('🧄', 330, 240);
+    ctx.font = 'bold 80px sans-serif';
+    ctx.fillText('💛', 256, 340);
+    // 下载
+    canvas.toBlob(b => {
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(b);
+      a.download = 'icon-512.png';
+      a.click();
+    });
+  </script>
+</body></html>

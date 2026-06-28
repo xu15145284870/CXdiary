@@ -1,0 +1,222 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="#F5D6B3">
+  <meta name="theme-color" content="#FFF8E7">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="apple-touch-icon" href="/icons/icon-192.png">
+  <title>葱蒜的考研日记</title>
+  <link rel="stylesheet" href="/css/style.css">
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+</head>
+<body>
+  <!-- ========== 签到页 ========== -->
+  <div id="view-calendar" class="view active">
+    <div class="month-nav">
+      <button class="nav-arrow" id="prevMonth">‹</button>
+      <span class="month-title" id="displayMonth"></span>
+      <button class="nav-arrow" id="nextMonth">›</button>
+    </div>
+
+    <div class="card calendar-card">
+      <div class="weekday-row">
+        <span class="weekend">日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span class="weekend">六</span>
+      </div>
+      <div class="day-grid" id="calendarGrid"></div>
+    </div>
+
+    <!-- 今日签到卡片 -->
+    <div class="card checkin-card" id="checkinCard">
+      <div id="checkinPending">
+        <div class="checkin-left">
+          <span class="checkin-icon">📅</span>
+          <div>
+            <div class="checkin-text" id="todayLabel"></div>
+            <div class="checkin-sub">点击签到，记录今天的心情吧～</div>
+          </div>
+        </div>
+        <button class="btn btn-primary checkin-btn" id="checkinBtn">✨ 签到</button>
+      </div>
+      <div id="checkinDone" style="display:none">
+        <div class="done-icon">🎉</div>
+        <div class="done-info">
+          <span class="done-title">今日已签到</span>
+          <span class="done-emoji" id="myTodayEmoji"></span>
+        </div>
+        <div id="partnerStatus"></div>
+      </div>
+    </div>
+
+    <!-- 统计卡片 -->
+    <div class="card stats-card">
+      <div class="stats-title">📊 本月统计</div>
+      <div class="stats-grid">
+        <div class="stat-item"><span class="stat-avatar">🧅</span><span class="stat-num" id="statMy">0</span><span class="stat-label">我签了</span><span class="stat-streak" id="statMyStreak">🔥 0天</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat-item"><span class="stat-avatar">🧄</span><span class="stat-num" id="statPartner">0</span><span class="stat-label" id="statPartnerLabel">TA签了</span><span class="stat-streak" id="statPartnerStreak">🔥 0天</span></div>
+        <div class="stat-divider"></div>
+        <div class="stat-item"><span class="stat-heart">💕</span><span class="stat-num" id="statBoth">0</span><span class="stat-label">一起签了</span></div>
+      </div>
+    </div>
+
+    <!-- Emoji 选择器浮层 -->
+    <div class="overlay" id="emojiOverlay">
+      <div class="emoji-sheet">
+        <div class="sheet-header">
+          <span class="sheet-title">今天的心情</span>
+          <span class="sheet-subtitle">选一个表情来记录吧～</span>
+        </div>
+        <div class="emoji-grid" id="emojiGrid"></div>
+        <button class="btn btn-ghost skip-btn" id="skipEmoji">跳过，直接签到</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 番茄钟页 ========== -->
+  <div id="view-pomodoro" class="view">
+    <div class="timer-section">
+      <div class="timer-ring" id="timerRing">
+        <canvas id="timerCanvas" width="260" height="260"></canvas>
+        <div class="timer-center">
+          <span class="timer-display" id="timerDisplay">25:00</span>
+          <span class="timer-mode-text" id="timerModeText">🍅 准备专注</span>
+        </div>
+      </div>
+
+      <div class="controls">
+        <button class="main-btn start" id="timerToggle">
+          <span class="btn-icon">▶️</span>
+          <span class="btn-label" id="timerToggleLabel">开始专注</span>
+        </button>
+        <div class="sub-controls" id="subControls" style="display:none">
+          <button class="sub-btn" id="resetTimer">🔄 重置</button>
+          <button class="sub-btn skip" id="skipTimer" style="display:none">⏭️ 跳过</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="card settings-card">
+      <div class="settings-header" id="toggleSettings">
+        <span class="settings-title">⚙️ 时长设置</span>
+        <span class="toggle-arrow" id="settingsArrow">›</span>
+      </div>
+      <div class="settings-body" id="settingsBody">
+        <div class="setting-item">
+          <div class="setting-label-row"><span>🍅 专注时长</span><span class="setting-value" id="workValue">25 分钟</span></div>
+          <input type="range" min="1" max="60" value="25" class="slider" id="workSlider">
+          <div class="slider-marks"><span>1</span><span>25</span><span>60</span></div>
+        </div>
+        <div class="setting-item">
+          <div class="setting-label-row"><span>☕ 休息时长</span><span class="setting-value" id="breakValue">5 分钟</span></div>
+          <input type="range" min="0" max="20" value="5" class="slider break-slider" id="breakSlider">
+          <div class="slider-marks"><span>0</span><span>10</span><span>20</span></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card tip-card">
+      <span class="tip-icon">💡</span>
+      <span class="tip-text">每完成一个番茄钟，记得去签到页面打个卡哦～</span>
+    </div>
+  </div>
+
+  <!-- ========== 日记页 ========== -->
+  <div id="view-journal" class="view">
+    <div class="timeline" id="journalTimeline"></div>
+    <div class="empty-state" id="journalEmpty">
+      <span class="empty-icon">📝</span>
+      <span class="empty-text">还没有日记</span>
+      <span class="text-caption">记录下学习中的体会吧～</span>
+    </div>
+    <button class="fab" id="openEditor">✏️</button>
+
+    <!-- 写日记浮层 -->
+    <div class="overlay" id="editorOverlay">
+      <div class="editor-sheet">
+        <div class="editor-header">
+          <span class="editor-title">写日记</span>
+          <button class="editor-close" id="closeEditor">✕</button>
+        </div>
+        <textarea class="editor-textarea" id="editorContent" placeholder="记录今天的学习体会..." maxlength="2000"></textarea>
+        <div class="char-count"><span id="charCount">0</span>/2000</div>
+        <div class="image-preview-row" id="imagePreviewRow"></div>
+        <div class="editor-actions">
+          <button class="btn btn-outline" id="chooseImage">📷 添加图片</button>
+          <button class="btn btn-primary" id="publishJournal">📝 发布</button>
+        </div>
+        <input type="file" id="imageInput" accept="image/*" multiple hidden>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 我的页 ========== -->
+  <div id="view-profile" class="view">
+    <div class="profile-header">
+      <div class="header-content">
+        <div class="avatar-placeholder" id="profileAvatar">💛</div>
+        <input class="nickname-input" id="nicknameInput" placeholder="点击设置昵称" maxlength="20">
+        <div class="role-tag" id="roleTag">👆 选择身份</div>
+      </div>
+    </div>
+
+    <div class="card" id="roleSelectCard" style="display:none">
+      <div class="section-title">选择你的身份</div>
+      <div class="role-options">
+        <button class="role-option" data-role="cong"><span class="role-icon">🧅</span><span class="role-name">葱</span></button>
+        <button class="role-option" data-role="suan"><span class="role-icon">🧄</span><span class="role-name">蒜</span></button>
+      </div>
+    </div>
+
+    <div class="card pair-section">
+      <div class="section-title">💕 配对状态</div>
+      <div id="pairedInfo"></div>
+      <div id="unpairedInfo">
+        <p class="pair-hint">和你的考研搭子配对，一起记录学习吧～</p>
+        <div id="pairCodeArea" style="display:none">
+          <div class="pair-code-label">我的配对码</div>
+          <div class="code-box" id="copyPairCode">
+            <span class="code-text" id="myPairCode">------</span>
+            <span class="copy-hint">点击复制</span>
+          </div>
+          <div class="code-input-row">
+            <input class="code-input" id="partnerCodeInput" type="text" maxlength="6" placeholder="输入对方配对码">
+            <button class="btn btn-primary pair-btn" id="doPair">配对</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="card about-section">
+      <div class="section-title">📖 关于</div>
+      <div class="about-content">
+        <span class="about-name">葱蒜的考研日记</span>
+        <span class="about-desc">两个人的考研陪伴小工具</span>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========== 底部导航 ========== -->
+  <nav class="tab-bar">
+    <div class="tab-item active" data-tab="calendar">
+      <span class="tab-icon">📅</span><span class="tab-text">签到</span>
+    </div>
+    <div class="tab-item" data-tab="pomodoro">
+      <span class="tab-icon">🍅</span><span class="tab-text">番茄钟</span>
+    </div>
+    <div class="tab-item" data-tab="journal">
+      <span class="tab-icon">📝</span><span class="tab-text">日记</span>
+    </div>
+    <div class="tab-item" data-tab="profile">
+      <span class="tab-icon">💛</span><span class="tab-text">我的</span>
+    </div>
+  </nav>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <script type="module" src="/js/app.js"></script>
+</body>
+</html>
