@@ -2,19 +2,19 @@
   "name": "葱蒜的考研日记",
   "short_name": "葱蒜日记",
   "description": "两个人的考研陪伴小工具",
-  "start_url": "/",
+  "start_url": "./",
   "display": "standalone",
   "background_color": "#FFF8E7",
   "theme_color": "#F5D6B3",
   "orientation": "portrait",
   "icons": [
     {
-      "src": "/icons/icon-192.png",
+      "src": "./icons/icon-192.png",
       "sizes": "192x192",
       "type": "image/png"
     },
     {
-      "src": "/icons/icon-512.png",
+      "src": "./icons/icon-512.png",
       "sizes": "512x512",
       "type": "image/png"
     }

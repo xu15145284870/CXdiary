@@ -1,10 +1,10 @@
 // Service Worker - 基础离线缓存
 const CACHE = 'cong-suan-v1';
 const PRECACHE = [
-  '/',
-  '/css/style.css',
-  '/js/app.js',
-  '/manifest.json',
+  './',
+  './css/style.css',
+  './js/app.js',
+  './manifest.json',
 ];
 
 self.addEventListener('install', (e) => {
