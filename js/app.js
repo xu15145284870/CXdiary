@@ -3,8 +3,8 @@
 // ============================================
 
 // ===== Supabase 配置 =====
-const SUPABASE_URL = 'https://YOUR_PROJECT.supabase.co';
-const SUPABASE_KEY = 'YOUR_ANON_KEY';
+const SUPABASE_URL = 'https://phmkjfxvpowbgtxaotir.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobWtqZnh2cG93Ymd0eGFvdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTM2MDksImV4cCI6MjA5ODIyOTYwOX0.4XCnkUoDZ1fBaAg-SILIrgay1c09fI4ZdKi25DHUZM4';
 
 const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
