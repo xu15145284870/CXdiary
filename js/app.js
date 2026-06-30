@@ -6,7 +6,14 @@
 const SUPABASE_URL = 'https://phmkjfxvpowbgtxaotir.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobWtqZnh2cG93Ymd0eGFvdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTM2MDksImV4cCI6MjA5ODIyOTYwOX0.4XCnkUoDZ1fBaAg-SILIrgay1c09fI4ZdKi25DHUZM4';
 
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+let supabase = null;
+try {
+  if (window.supabase) {
+    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+  }
+} catch(e) {
+  console.error('Supabase 初始化失败:', e);
+}
 
 // ===== 全局状态 =====
 const state = {
@@ -122,6 +129,7 @@ function saveState() {
 }
 
 async function initOrGetUser() {
+  if (!supabase) { console.warn('Supabase 未加载，跳过数据库操作'); return; }
   if (!state.pairCode) {
     state.pairCode = generatePairCode();
     saveState();
@@ -878,6 +886,12 @@ function showModal(title, content, hasCancel = false, confirmText = '确定', ca
 // 🚀 初始化
 // ============================================
 async function init() {
+  if (!supabase) {
+    console.warn('Supabase 未加载，请在网络正常的环境下使用');
+    renderProfile();
+    updateTimerDisplay();
+    return;
+  }
   await initOrGetUser();
   await loadPomodoroSettings();
   renderCalendar();
