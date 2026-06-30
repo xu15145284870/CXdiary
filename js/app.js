@@ -44,7 +44,12 @@ function formatTime(sec) {
   return `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
 }
 
-function generatePairCode() { return String(Math.floor(100000 + Math.random() * 900000)); }
+function generatePairCode() {
+  const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+  let code = '';
+  for (let i = 0; i < 8; i++) code += chars[Math.floor(Math.random() * chars.length)];
+  return code;
+}
 
 function calcStreak(dates) {
   if (!dates.length) return 0;
@@ -159,21 +164,32 @@ async function doPair() {
   if (!state.role) { toast('请先选择身份'); return; }
   if (state.partner) { toast('已经配对过了'); return; }
   const code = $('#partnerCodeInput').value.trim();
-  if (code.length !== 6) { toast('请输入6位配对码'); return; }
+  if (code.length < 6) { toast('请输入正确的配对码'); return; }
+  if (code === state.pairCode) { toast('不能和自己配对哦'); return; }
 
+  // 查找拥有该配对码的用户
   const { data } = await supabase.from('users').select('*').eq('pair_code', code);
-  if (!data?.length) { toast('配对码无效'); return; }
+  if (!data?.length) { toast('配对码无效，请检查'); return; }
 
-  const otherRole = state.role === 'cong' ? 'suan' : 'cong';
-  const partner = data.find(u => u.role === otherRole);
-  if (!partner) {
-    // 对方还没选身份，可以先设配对码
-    state.pairCode = code;
-    saveState();
-    await initOrGetUser();
-    renderProfile();
-    toast('已切换到该配对码，等对方选择身份～');
+  const owner = data[0];
+
+  // 检查对方是否已配对（同一个 pair_code 下有两个人就是已配对）
+  const { data: alreadyPaired } = await supabase.from('users').select('*').eq('pair_code', code);
+  if (alreadyPaired && alreadyPaired.length >= 2) {
+    toast('对方已经和别人配对啦');
     return;
+  }
+
+  // 检查身份是否冲突
+  if (owner.role === state.role) {
+    toast('你们选了同一个身份！一个人需要换成另一个哦～');
+    return;
+  }
+
+  // 更新自己数据库里的 pair_code
+  const { data: myData } = await supabase.from('users').select('*').eq('pair_code', state.pairCode).eq('role', state.role);
+  if (myData?.length) {
+    await supabase.from('users').update({ pair_code: code }).eq('id', myData[0].id);
   }
 
   state.pairCode = code;
@@ -181,17 +197,32 @@ async function doPair() {
   await initOrGetUser();
   renderProfile();
   renderCalendar();
+  loadJournals();
   toast('配对成功！💕');
 }
 
 async function unpair() {
-  state.pairCode = generatePairCode();
+  // 找到配对双方在数据库的记录
+  const { data } = await supabase.from('users').select('*').eq('pair_code', state.pairCode);
+
+  const myNewCode = generatePairCode();
+  const partnerNewCode = generatePairCode();
+
+  if (data?.length >= 2) {
+    const me = data.find(u => u.role === state.role);
+    const partner = data.find(u => u.role !== state.role);
+    if (me) await supabase.from('users').update({ pair_code: myNewCode }).eq('id', me.id);
+    if (partner) await supabase.from('users').update({ pair_code: partnerNewCode }).eq('id', partner.id);
+  } else if (data?.length === 1) {
+    await supabase.from('users').update({ pair_code: myNewCode }).eq('id', data[0].id);
+  }
+
+  state.pairCode = myNewCode;
   state.partner = null;
   saveState();
-  await initOrGetUser();
   renderProfile();
   renderCalendar();
-  toast('已解除配对');
+  toast('已解除配对，双方已分开');
 }
 
 // ============================================
