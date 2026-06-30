@@ -216,6 +216,22 @@
   <!-- Toast -->
   <div class="toast" id="toast"></div>
 
+  <script>
+    // 调试：确认页面能跑 JS
+    document.addEventListener('DOMContentLoaded', function() {
+      var t = document.querySelectorAll('.tab-item');
+      t.forEach(function(el, i) {
+        el.onclick = function() {
+          document.querySelectorAll('.view').forEach(function(v) { v.classList.remove('active'); });
+          var tab = el.getAttribute('data-tab');
+          var view = document.getElementById('view-' + tab);
+          if (view) view.classList.add('active');
+          t.forEach(function(x) { x.classList.remove('active'); });
+          el.classList.add('active');
+        };
+      });
+    });
+  </script>
   <script src="./js/app.js" defer></script>
 </body>
 </html>
