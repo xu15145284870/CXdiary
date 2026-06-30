@@ -2,17 +2,34 @@
 // 葱蒜的考研日记 — Web 版
 // ============================================
 
-// ===== Supabase 配置 =====
+// ===== Supabase 动态加载（不阻塞页面） =====
 const SUPABASE_URL = 'https://phmkjfxvpowbgtxaotir.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobWtqZnh2cG93Ymd0eGFvdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTM2MDksImV4cCI6MjA5ODIyOTYwOX0.4XCnkUoDZ1fBaAg-SILIrgay1c09fI4ZdKi25DHUZM4';
 
 let supabase = null;
-try {
-  if (window.supabase) {
-    supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// 从多个 CDN 尝试加载 Supabase，超时 3 秒
+function loadSupabase(cb) {
+  const CDNS = [
+    'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+    'https://registry.npmmirror.com/@supabase/supabase-js/latest/files/dist/umd/supabase.min.js',
+  ];
+  let idx = 0;
+  function tryNext() {
+    if (idx >= CDNS.length) { cb(); return; }
+    const s = document.createElement('script');
+    s.src = CDNS[idx++];
+    s.onload = () => {
+      try { supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) {}
+      cb();
+    };
+    s.onerror = () => tryNext();
+    const t = setTimeout(() => { s.onerror = null; tryNext(); }, 3000);
+    s.onload = () => clearTimeout(t);
+    document.head.appendChild(s);
   }
-} catch(e) {
-  console.error('Supabase 初始化失败:', e);
+  tryNext();
 }
 
 // ===== 全局状态 =====
@@ -908,7 +925,9 @@ async function init() {
 
 // 注册 Service Worker (PWA)
 if ('serviceWorker' in navigator) {
-  navigator.serviceWorker.register('/sw.js').catch(() => {});
+  navigator.serviceWorker.register('./sw.js').catch(() => {});
 }
 
-init();
+renderProfile();
+updateTimerDisplay();
+loadSupabase(init);
