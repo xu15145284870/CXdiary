@@ -242,8 +242,6 @@
 // 葱蒜的考研日记 — 内联版（不依赖外部文件）
 // ============================================
 (function(){
-document.body.style.backgroundColor = '#ffcccc';  // 红闪测试
-setTimeout(function(){ document.body.style.backgroundColor = ''; }, 800);
 
 const SUPABASE_URL = 'https://phmkjfxvpowbgtxaotir.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobWtqZnh2cG93Ymd0eGFvdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTM2MDksImV4cCI6MjA5ODIyOTYwOX0.4XCnkUoDZ1fBaAg-SILIrgay1c09fI4ZdKi25DHUZM4';
@@ -381,10 +379,7 @@ async function unpair(){
 var EMOJIS=['😊','🥰','😆','😎','🤩','😇','💪','📚','✍️','🎯','🔥','⭐','😌','🧘','🍃','☕','🌙','🌸','😢','😤','😴','🤔','🥺','😅'];
 
 async function renderCalendar(){
-  if(!state.pairCode||!supabase){
-    toast('跳过: '+(state.pairCode?'有码':'无配对码')+' '+(supabase?'有库':'无数据库'));
-    return;
-  }
+  if(!state.pairCode||!supabase) return;
   try{
   var year=state.year,month=state.month,ym=year+'-'+String(month+1).padStart(2,'0');
   var dm=$('#displayMonth'); if(dm) dm.textContent=year+'年 '+(month+1)+'月';
@@ -392,8 +387,6 @@ async function renderCalendar(){
   var firstDay=ym+'-01', lastDay=nextY+'-'+String(nextMon+1).padStart(2,'0')+'-01';
   var res=await supabase.from('checkins').select('*').eq('pair_code',state.pairCode).gte('date',firstDay).lt('date',lastDay);
   var checkins=res.data||[];
-  console.log('renderCalendar: pair='+state.pairCode+' month='+ym+' found='+checkins.length, checkins);
-  toast('本月 '+checkins.length+' 条签到');
   var myChecks=checkins.filter(function(c){return c.role===state.role;});
   var partnerChecks=checkins.filter(function(c){return c.role!==state.role;});
   var myDates=new Set(myChecks.map(function(c){return c.date;}));
@@ -639,9 +632,7 @@ function showModal(title,content,hasCancel,confirmText,cancelText){
 
 // 初始化
 async function init(){
-  toast('初始化...');
   await initOrGetUser(); await loadPomodoroSettings();
-  toast('加载设置完成，渲染日历');
   renderCalendar(); renderProfile(); updateTimerDisplay();
 }
 
