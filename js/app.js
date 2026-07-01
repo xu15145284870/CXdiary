@@ -186,6 +186,7 @@ async function setRole(role) {
 }
 
 async function doPair() {
+  alert('配对按钮被点击了！'); // 调试用
   if (!state.role) { toast('请先选择身份'); return; }
   if (state.partner) { toast('已经配对过了'); return; }
   const code = $('#partnerCodeInput').value.trim();
