@@ -379,7 +379,10 @@ async function unpair(){
 var EMOJIS=['😊','🥰','😆','😎','🤩','😇','💪','📚','✍️','🎯','🔥','⭐','😌','🧘','🍃','☕','🌙','🌸','😢','😤','😴','🤔','🥺','😅'];
 
 async function renderCalendar(){
-  if(!state.pairCode||!supabase){ console.warn('renderCalendar skipped',!!state.pairCode,!!supabase); return; }
+  if(!state.pairCode||!supabase){
+    toast('跳过: '+(state.pairCode?'有码':'无配对码')+' '+(supabase?'有库':'无数据库'));
+    return;
+  }
   try{
   var year=state.year,month=state.month,ym=year+'-'+String(month+1).padStart(2,'0');
   var dm=$('#displayMonth'); if(dm) dm.textContent=year+'年 '+(month+1)+'月';
@@ -634,7 +637,9 @@ function showModal(title,content,hasCancel,confirmText,cancelText){
 
 // 初始化
 async function init(){
+  toast('初始化...');
   await initOrGetUser(); await loadPomodoroSettings();
+  toast('加载设置完成，渲染日历');
   renderCalendar(); renderProfile(); updateTimerDisplay();
 }
 
