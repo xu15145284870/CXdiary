@@ -240,38 +240,14 @@
 // ============================================
 // 葱蒜的考研日记 — 内联版（不依赖外部文件）
 // ============================================
+<script src="./js/supabase.min.js"></script>
+<script>
 (function(){
-// ===== 页面上色测试：JS若运行，背景短暂变绿 =====
-document.body.style.backgroundColor = '#c8f7c5';
-setTimeout(function(){ document.body.style.backgroundColor = ''; }, 500);
 
 const SUPABASE_URL = 'https://phmkjfxvpowbgtxaotir.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobWtqZnh2cG93Ymd0eGFvdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTM2MDksImV4cCI6MjA5ODIyOTYwOX0.4XCnkUoDZ1fBaAg-SILIrgay1c09fI4ZdKi25DHUZM4';
 
-let supabase = null;
-
-function loadSupabase(cb) {
-  const CDNS = [
-    'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js',
-    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
-    'https://registry.npmmirror.com/@supabase/supabase-js/latest/files/dist/umd/supabase.min.js',
-  ];
-  let idx = 0;
-  function tryNext() {
-    if (idx >= CDNS.length) { cb(); return; }
-    const s = document.createElement('script');
-    s.src = CDNS[idx++];
-    s.onload = function() {
-      try { supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) {}
-      cb();
-    };
-    s.onerror = function() { tryNext(); };
-    const t = setTimeout(function() { s.onerror = null; tryNext(); }, 3000);
-    s.onload = function() { clearTimeout(t); };
-    document.head.appendChild(s);
-  }
-  tryNext();
-}
+let supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
 
 const state = {
   pairCode: localStorage.getItem('pairCode') || '',
@@ -652,7 +628,6 @@ function showModal(title,content,hasCancel,confirmText,cancelText){
 
 // 初始化
 async function init(){
-  if(!supabase){renderProfile();updateTimerDisplay();return;}
   await initOrGetUser(); await loadPomodoroSettings();
   renderCalendar(); renderProfile(); updateTimerDisplay();
 }
@@ -660,8 +635,8 @@ async function init(){
 if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js')['catch'](function(){});}
 
 // 页面就绪后启动
-if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){renderProfile();updateTimerDisplay();loadSupabase(init);});}
-else{renderProfile();updateTimerDisplay();loadSupabase(init);}
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){renderProfile();updateTimerDisplay();init();});}
+else{renderProfile();updateTimerDisplay();init();}
 
 // 暴露到全局（给 onclick 使用）
 window.unpair = unpair;
