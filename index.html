@@ -387,6 +387,8 @@ async function renderCalendar(){
   var firstDay=ym+'-01', lastDay=nextY+'-'+String(nextMon+1).padStart(2,'0')+'-01';
   var res=await supabase.from('checkins').select('*').eq('pair_code',state.pairCode).gte('date',firstDay).lt('date',lastDay);
   var checkins=res.data||[];
+  console.log('renderCalendar: pair='+state.pairCode+' month='+ym+' found='+checkins.length, checkins);
+  toast('本月 '+checkins.length+' 条签到');
   var myChecks=checkins.filter(function(c){return c.role===state.role;});
   var partnerChecks=checkins.filter(function(c){return c.role!==state.role;});
   var myDates=new Set(myChecks.map(function(c){return c.date;}));
