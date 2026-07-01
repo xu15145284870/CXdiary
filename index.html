@@ -236,6 +236,431 @@
       });
     });
   </script>
-  <script src="./js/app.js" defer onerror="document.body.innerHTML+='<div style=position:fixed;top:30px;left:0;right:0;background:red;color:#fff;padding:10px;z-index:9999>app.js 加载失败！</div>'"></script>
+  <script>
+// ============================================
+// 葱蒜的考研日记 — 内联版（不依赖外部文件）
+// ============================================
+(function(){
+
+const SUPABASE_URL = 'https://phmkjfxvpowbgtxaotir.supabase.co';
+const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobWtqZnh2cG93Ymd0eGFvdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTM2MDksImV4cCI6MjA5ODIyOTYwOX0.4XCnkUoDZ1fBaAg-SILIrgay1c09fI4ZdKi25DHUZM4';
+
+let supabase = null;
+
+function loadSupabase(cb) {
+  const CDNS = [
+    'https://unpkg.com/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+    'https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.min.js',
+    'https://registry.npmmirror.com/@supabase/supabase-js/latest/files/dist/umd/supabase.min.js',
+  ];
+  let idx = 0;
+  function tryNext() {
+    if (idx >= CDNS.length) { cb(); return; }
+    const s = document.createElement('script');
+    s.src = CDNS[idx++];
+    s.onload = function() {
+      try { supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY); } catch(e) {}
+      cb();
+    };
+    s.onerror = function() { tryNext(); };
+    const t = setTimeout(function() { s.onerror = null; tryNext(); }, 3000);
+    s.onload = function() { clearTimeout(t); };
+    document.head.appendChild(s);
+  }
+  tryNext();
+}
+
+const state = {
+  pairCode: localStorage.getItem('pairCode') || '',
+  role: localStorage.getItem('role') || '',
+  nickname: localStorage.getItem('nickname') || '',
+  partner: null,
+  year: new Date().getFullYear(),
+  month: new Date().getMonth(),
+  timerMode: 'work',
+  timerState: 'idle',
+  timerRemaining: 25 * 60,
+  timerTotal: 25 * 60,
+  timerId: null,
+};
+
+const $ = function(sel) { return document.querySelector(sel); };
+const $$ = function(sel) { return document.querySelectorAll(sel); };
+
+function formatDate(d) { const y=d.getFullYear(),m=String(d.getMonth()+1).padStart(2,'0'),day=String(d.getDate()).padStart(2,'0'); return y+'-'+m+'-'+day; }
+function today() { return formatDate(new Date()); }
+function formatTime(sec) { const m=Math.floor(sec/60),s=sec%60; return String(m).padStart(2,'0')+':'+String(s).padStart(2,'0'); }
+function generatePairCode() { const chars='abcdefghijklmnopqrstuvwxyz0123456789'; let c=''; for(let i=0;i<8;i++) c+=chars[Math.floor(Math.random()*chars.length)]; return c; }
+
+function calcStreak(dates) {
+  if(!dates.length) return 0;
+  const sorted=[...dates].sort().reverse(),t=today(),y=formatDate(new Date(Date.now()-86400000));
+  if(sorted[0]!==t&&sorted[0]!==y) return 0;
+  let s=1; for(let i=0;i<sorted.length-1;i++){if((new Date(sorted[i])-new Date(sorted[i+1]))/86400000===1) s++; else break;}
+  return s;
+}
+
+function daysInMonth(y,m){return new Date(y,m+1,0).getDate();}
+function firstDayOfMonth(y,m){return new Date(y,m,1).getDay();}
+
+function generateCalendar(y,m){
+  const days=daysInMonth(y,m),first=firstDayOfMonth(y,m),t=today(),cal=[];
+  for(let i=0;i<first;i++){const d=new Date(y,m,-first+i+1);cal.push({date:formatDate(d),day:d.getDate(),current:false,isToday:false});}
+  for(let i=1;i<=days;i++){const ds=y+'-'+String(m+1).padStart(2,'0')+'-'+String(i).padStart(2,'0');cal.push({date:ds,day:i,current:true,isToday:ds===t});}
+  while(cal.length<42){const i=cal.length-days-first+1,d=new Date(y,m+1,i);cal.push({date:formatDate(d),day:d.getDate(),current:false,isToday:false});}
+  return cal;
+}
+
+function toast(msg){
+  const el=$('#toast'); if(!el) return;
+  el.textContent=msg; el.classList.add('show'); clearTimeout(el._t);
+  el._t=setTimeout(function(){el.classList.remove('show');},1800);
+}
+
+function switchTab(tab){
+  $$('.view').forEach(function(v){v.classList.remove('active');});
+  $$('.tab-item').forEach(function(t){t.classList.remove('active');});
+  var v=$('#view-'+tab); if(v) v.classList.add('active');
+  var ti=document.querySelector('.tab-item[data-tab="'+tab+'"]'); if(ti) ti.classList.add('active');
+  if(tab==='calendar') renderCalendar();
+  if(tab==='pomodoro') drawTimerRing();
+  if(tab==='journal') loadJournals();
+  if(tab==='profile') renderProfile();
+}
+
+// Tab 事件绑定
+$$('.tab-item').forEach(function(el){el.addEventListener('click',function(){switchTab(el.dataset.tab);});});
+
+function saveState(){
+  localStorage.setItem('pairCode',state.pairCode);
+  localStorage.setItem('role',state.role);
+  localStorage.setItem('nickname',state.nickname);
+}
+
+async function initOrGetUser(){
+  if(!supabase) return;
+  if(!state.pairCode){state.pairCode=generatePairCode();saveState();}
+  var res=await supabase.from('users').select('*').eq('pair_code',state.pairCode);
+  var data=res.data;
+  var me=data?data.find(function(u){return u.role===state.role;}):null;
+  if(!me&&state.role){
+    await supabase.from('users').insert({pair_code:state.pairCode,role:state.role,nickname:state.nickname});
+  }else if(me&&state.nickname&&me.nickname!==state.nickname){
+    await supabase.from('users').update({nickname:state.nickname}).eq('id',me.id);
+  }
+  var otherRole=state.role==='cong'?'suan':'cong';
+  var partner=data?data.find(function(u){return u.role===otherRole;}):null;
+  if(partner){state.partner={role:partner.role,nickname:partner.nickname};}
+}
+
+async function setRole(role){
+  if(state.partner){toast('已配对，无法修改身份');return;}
+  state.role=role; saveState(); await initOrGetUser(); renderProfile();
+  toast(role==='cong'?'已设置为 葱':'已设置为 蒜');
+}
+
+async function doPair(){
+  if(!state.role){toast('请先选择身份');return;}
+  if(state.partner){toast('已经配对过了');return;}
+  if(!supabase){toast('正在连接服务器，请稍后再试');return;}
+  var code=$('#partnerCodeInput').value.trim();
+  if(code.length<6){toast('请输入正确的配对码');return;}
+  if(code===state.pairCode){toast('不能和自己配对哦');return;}
+  var res=await supabase.from('users').select('*').eq('pair_code',code);
+  if(!res.data||!res.data.length){toast('配对码无效，请检查');return;}
+  var owner=res.data[0];
+  var checkRes=await supabase.from('users').select('*').eq('pair_code',code);
+  if(checkRes.data&&checkRes.data.length>=2){toast('对方已经和别人配对啦');return;}
+  if(owner.role===state.role){toast('你们选了同一个身份！一个人需要换成另一个哦～');return;}
+  var myRes=await supabase.from('users').select('*').eq('pair_code',state.pairCode).eq('role',state.role);
+  if(myRes.data&&myRes.data.length){
+    await supabase.from('users').update({pair_code:code}).eq('id',myRes.data[0].id);
+  }
+  state.pairCode=code; saveState(); await initOrGetUser(); renderProfile(); renderCalendar(); loadJournals();
+  toast('配对成功！');
+}
+
+async function unpair(){
+  if(!supabase) return;
+  var res=await supabase.from('users').select('*').eq('pair_code',state.pairCode);
+  var myNewCode=generatePairCode(),partnerNewCode=generatePairCode();
+  if(res.data&&res.data.length>=2){
+    var me=res.data.find(function(u){return u.role===state.role;});
+    var partner=res.data.find(function(u){return u.role!==state.role;});
+    if(me) await supabase.from('users').update({pair_code:myNewCode}).eq('id',me.id);
+    if(partner) await supabase.from('users').update({pair_code:partnerNewCode}).eq('id',partner.id);
+  }else if(res.data&&res.data.length===1){
+    await supabase.from('users').update({pair_code:myNewCode}).eq('id',res.data[0].id);
+  }
+  state.pairCode=myNewCode; state.partner=null; saveState(); renderProfile(); renderCalendar();
+  toast('已解除配对，双方已分开');
+}
+
+// 日历
+var EMOJIS=['😊','🥰','😆','😎','🤩','😇','💪','📚','✍️','🎯','🔥','⭐','😌','🧘','🍃','☕','🌙','🌸','😢','😤','😴','🤔','🥺','😅'];
+
+async function renderCalendar(){
+  if(!state.pairCode||!supabase) return;
+  var year=state.year,month=state.month,ym=year+'-'+String(month+1).padStart(2,'0');
+  $('#displayMonth').textContent=year+'年 '+(month+1)+'月';
+  var res=await supabase.from('checkins').select('*').eq('pair_code',state.pairCode).like('date',ym+'-%');
+  var checkins=res.data||[];
+  var myChecks=checkins.filter(function(c){return c.role===state.role;});
+  var partnerChecks=checkins.filter(function(c){return c.role!==state.role;});
+  var myDates=new Set(myChecks.map(function(c){return c.date;}));
+  var partnerDates=new Set(partnerChecks.map(function(c){return c.date;}));
+  var myEmoji={}; myChecks.forEach(function(c){if(c.emoji) myEmoji[c.date]=c.emoji;});
+  var partnerEmoji={}; partnerChecks.forEach(function(c){if(c.emoji) partnerEmoji[c.date]=c.emoji;});
+  var cal=generateCalendar(year,month),t=today();
+  $('#calendarGrid').innerHTML=cal.map(function(c){
+    var both=myDates.has(c.date)&&partnerDates.has(c.date);
+    var mine=myDates.has(c.date),theirs=partnerDates.has(c.date);
+    var cls='day-cell';
+    if(!c.current) cls+=' dimmed';
+    if(c.isToday) cls+=' today';
+    if(c.date>t) cls+=' future';
+    var mark='';
+    if(both) mark='<div class="checkin-marks"><span class="both-mark">❤</span></div>';
+    else if(mine) mark='<div class="checkin-marks"><span class="checkin-mark">'+(myEmoji[c.date]||'✅')+'</span></div>';
+    else if(theirs) mark='<div class="checkin-marks"><span class="checkin-mark" style="opacity:0.5">'+(partnerEmoji[c.date]||'✅')+'</span></div>';
+    var clickable=(mine||theirs)&&c.date<=t;
+    return '<div class="'+cls+'"'+(clickable?' onclick="window._showDayDetail(\''+c.date+'\')"':'')+'>'+c.day+mark+'</div>';
+  }).join('');
+  var myToday=myChecks.find(function(c){return c.date===t;});
+  var partnerToday=partnerChecks.find(function(c){return c.date===t;});
+  if(myToday){
+    $('#checkinPending').style.display='none'; $('#checkinDone').style.display='block';
+    $('#myTodayEmoji').textContent=myToday.emoji||'✅';
+    if(partnerToday){
+      $('#partnerStatus').innerHTML='<div class="partner-status checked">❤ '+(state.partner?state.partner.nickname:'TA')+'也签到啦 '+(partnerToday.emoji||'✅')+'</div>';
+    }else{
+      $('#partnerStatus').innerHTML='<div class="partner-status waiting">等待 '+(state.partner?state.partner.nickname:'TA')+' 签到中...</div>';
+    }
+  }else{
+    $('#checkinPending').style.display='flex'; $('#checkinDone').style.display='none';
+    $('#todayLabel').textContent='今天是 '+year+'年'+(month+1)+'月'+new Date().getDate()+'日';
+  }
+  var myDatesArr=[...myDates].sort().reverse(),partnerDatesArr=[...partnerDates].sort().reverse();
+  var bothCount=[...myDates].filter(function(d){return partnerDates.has(d);}).length;
+  var partnerLabel=state.partner?state.partner.nickname:'TA';
+  $('#statMy').textContent=myChecks.length; $('#statPartner').textContent=partnerChecks.length;
+  $('#statBoth').textContent=bothCount;
+  $('#statMyStreak').textContent='🔥 '+calcStreak(myDatesArr)+'天';
+  $('#statPartnerStreak').textContent='🔥 '+calcStreak(partnerDatesArr)+'天';
+  $('#statPartnerLabel').textContent=partnerLabel+'签了';
+}
+
+// Emoji 选择器
+$('#checkinBtn').addEventListener('click',function(){
+  $('#emojiOverlay').classList.add('show');
+  $('#emojiGrid').innerHTML=EMOJIS.map(function(e){return '<span class="emoji-item" data-emoji="'+e+'">'+e+'</span>';}).join('');
+  $('#emojiGrid').querySelectorAll('.emoji-item').forEach(function(el){el.addEventListener('click',function(){doCheckin(el.dataset.emoji);});});
+});
+$('#skipEmoji').addEventListener('click',function(){doCheckin('');});
+$('#emojiOverlay').addEventListener('click',function(e){if(e.target===$('#emojiOverlay')) $('#emojiOverlay').classList.remove('show');});
+
+async function doCheckin(emoji){
+  if(!supabase) return;
+  $('#emojiOverlay').classList.remove('show');
+  var t=today();
+  var ex=await supabase.from('checkins').select('*').eq('pair_code',state.pairCode).eq('role',state.role).eq('date',t);
+  if(ex.data&&ex.data.length){toast('今天已经签到过了～');return;}
+  var r=await supabase.from('checkins').insert({pair_code:state.pairCode,role:state.role,date:t,emoji:emoji});
+  if(r.error){toast('签到失败');return;}
+  toast('签到成功！✨'); renderCalendar();
+}
+
+window._showDayDetail=function(date){
+  if(!supabase) return;
+  supabase.from('checkins').select('*').eq('pair_code',state.pairCode).eq('date',date).then(function(res){
+    if(!res.data||!res.data.length) return;
+    var lines=res.data.map(function(c){
+      var label=c.role===state.role?'我':(state.partner?state.partner.nickname:'TA');
+      var icon=c.role==='cong'?'葱':'蒜';
+      return icon+' '+label+': '+(c.emoji||'没有心情记录');
+    }).join('<br>');
+    showModal(date,lines,false);
+  });
+};
+
+$('#prevMonth').addEventListener('click',function(){if(state.month===0){state.year--;state.month=11;}else state.month--;renderCalendar();});
+$('#nextMonth').addEventListener('click',function(){if(state.month===11){state.year++;state.month=0;}else state.month++;renderCalendar();});
+
+// 番茄钟
+function drawTimerRing(){
+  var canvas=$('#timerCanvas'); if(!canvas) return;
+  var ctx=canvas.getContext('2d'),w=260,h=260,cx=w/2,cy=h/2,r=Math.min(cx,cy)-12;
+  var ratio=state.timerTotal>0?state.timerRemaining/state.timerTotal:0;
+  ctx.clearRect(0,0,w,h);
+  ctx.beginPath(); ctx.arc(cx,cy,r,0,Math.PI*2);
+  ctx.strokeStyle='rgba(245,214,179,.4)'; ctx.lineWidth=14; ctx.lineCap='round'; ctx.stroke();
+  if(ratio>0){
+    var start=-Math.PI/2,end=start+Math.PI*2*ratio;
+    var grad=ctx.createLinearGradient(0,0,w,h);
+    if(state.timerMode==='work'){grad.addColorStop(0,'#E8916A');grad.addColorStop(1,'#F5A623');}
+    else{grad.addColorStop(0,'#A8C97E');grad.addColorStop(1,'#81B29A');}
+    ctx.beginPath(); ctx.arc(cx,cy,r,start,end); ctx.strokeStyle=grad; ctx.lineWidth=14; ctx.lineCap='round'; ctx.stroke();
+  }
+}
+
+function updateTimerDisplay(){
+  $('#timerDisplay').textContent=formatTime(state.timerRemaining);
+  var mt=state.timerMode==='work'?(state.timerState==='idle'?'🍅 准备专注':'🍅 专注中'):(state.timerState==='idle'?'☕ 准备休息':'☕ 休息中');
+  $('#timerModeText').textContent=mt; drawTimerRing();
+}
+
+function timerTick(){if(state.timerState!=='running')return; state.timerRemaining--; updateTimerDisplay(); if(state.timerRemaining<=0){clearInterval(state.timerId);state.timerId=null;onTimerComplete();}}
+
+function onTimerComplete(){
+  state.timerState='idle'; clearInterval(state.timerId); state.timerId=null;
+  if(navigator.vibrate) navigator.vibrate([500,200,500]);
+  if(state.timerMode==='work'){
+    showModal('🎉 太棒了！','专注时间结束，休息一下吧～',true,'开始休息 ☕','等会儿').then(function(ok){if(ok) startBreak(); else updateUIState();});
+  }else{
+    showModal('☕ 休息好了吗？','休息时间结束，继续加油吧！',true,'继续专注 🍅','等会儿').then(function(ok){if(ok) startWork(); else updateUIState();});
+  }
+}
+
+function startWork(){state.timerMode='work'; state.timerRemaining=parseInt($('#workSlider').value)*60; state.timerTotal=state.timerRemaining; state.timerState='running'; state.timerId=setInterval(timerTick,1000); updateTimerDisplay(); updateUIState();}
+function startBreak(){state.timerMode='break'; state.timerRemaining=parseInt($('#breakSlider').value)*60; state.timerTotal=state.timerRemaining; state.timerState='running'; state.timerId=setInterval(timerTick,1000); updateTimerDisplay(); updateUIState();}
+
+function updateUIState(){
+  var ts=state.timerState,tm=state.timerMode;
+  var toggle=$('#timerToggle'),label=$('#timerToggleLabel'),icon=toggle.querySelector('.btn-icon');
+  toggle.className='main-btn';
+  if(ts==='running'){toggle.classList.add('pause');if(tm==='break') toggle.classList.add('break');icon.textContent='⏸️';label.textContent='暂停'+(tm==='work'?'专注':'休息');}
+  else{toggle.classList.add('start');if(tm==='break') toggle.classList.add('break');icon.textContent=ts==='paused'?'▶️':'▶️';label.textContent=(ts==='paused'?'继续':'开始')+(tm==='work'?'专注':'休息');}
+  $('#subControls').style.display=ts!=='idle'?'flex':'none';
+  $('#skipTimer').style.display=(ts==='running'&&tm==='work')?'block':'none';
+  $('#workSlider').disabled=ts==='running'; $('#breakSlider').disabled=ts==='running';
+}
+
+$('#timerToggle').addEventListener('click',function(){
+  if(state.timerState==='running'){state.timerState='paused';clearInterval(state.timerId);state.timerId=null;updateTimerDisplay();updateUIState();}
+  else{if(state.timerState==='idle'){state.timerRemaining=state.timerMode==='work'?parseInt($('#workSlider').value)*60:parseInt($('#breakSlider').value)*60;state.timerTotal=state.timerRemaining;}state.timerState='running';state.timerId=setInterval(timerTick,1000);updateTimerDisplay();updateUIState();}
+});
+$('#resetTimer').addEventListener('click',function(){clearInterval(state.timerId);state.timerId=null;state.timerState='idle';state.timerRemaining=state.timerMode==='work'?parseInt($('#workSlider').value)*60:parseInt($('#breakSlider').value)*60;state.timerTotal=state.timerRemaining;updateTimerDisplay();updateUIState();});
+$('#skipTimer').addEventListener('click',function(){clearInterval(state.timerId);state.timerId=null;state.timerState='idle';startBreak();});
+$('#workSlider').addEventListener('input',function(){var v=parseInt(this.value);$('#workValue').textContent=v+' 分钟';if(state.timerState==='idle'&&state.timerMode==='work'){state.timerRemaining=v*60;state.timerTotal=v*60;updateTimerDisplay();}savePomodoroSettings();});
+$('#breakSlider').addEventListener('input',function(){var v=parseInt(this.value);$('#breakValue').textContent=v+' 分钟';if(state.timerState==='idle'&&state.timerMode==='break'){state.timerRemaining=v*60;state.timerTotal=v*60;updateTimerDisplay();}savePomodoroSettings();});
+
+var _savePomTimer;
+function savePomodoroSettings(){clearTimeout(_savePomTimer);_savePomTimer=setTimeout(async function(){if(!state.pairCode||!state.role||!supabase)return;var wm=parseInt($('#workSlider').value),bm=parseInt($('#breakSlider').value);var d=await supabase.from('pomodoro_settings').select('*').eq('pair_code',state.pairCode).eq('role',state.role);if(d.data&&d.data.length){await supabase.from('pomodoro_settings').update({work_minutes:wm,break_minutes:bm}).eq('id',d.data[0].id);}else{await supabase.from('pomodoro_settings').insert({pair_code:state.pairCode,role:state.role,work_minutes:wm,break_minutes:bm});}},500);}
+
+async function loadPomodoroSettings(){if(!state.pairCode||!state.role||!supabase)return;var d=await supabase.from('pomodoro_settings').select('*').eq('pair_code',state.pairCode).eq('role',state.role);if(d.data&&d.data.length){$('#workSlider').value=d.data[0].work_minutes;$('#workValue').textContent=d.data[0].work_minutes+' 分钟';$('#breakSlider').value=d.data[0].break_minutes;$('#breakValue').textContent=d.data[0].break_minutes+' 分钟';state.timerRemaining=d.data[0].work_minutes*60;state.timerTotal=state.timerRemaining;updateTimerDisplay();}}
+$('#toggleSettings').addEventListener('click',function(){$('#settingsBody').classList.toggle('open');$('#settingsArrow').classList.toggle('open');});
+
+// 日记
+var journalSkip=0,journalHasMore=true;
+async function loadJournals(reset){
+  if(!state.pairCode||!supabase) return;
+  if(reset!==false){journalSkip=0;journalHasMore=true;}
+  var res=await supabase.from('journals').select('*').eq('pair_code',state.pairCode).order('created_at',{ascending:false}).range(journalSkip,journalSkip+19);
+  if(res.error||!res.data) return;
+  journalSkip+=res.data.length; journalHasMore=res.data.length>=20;
+  if(reset!==false) $('#journalTimeline').innerHTML='';
+  if(res.data.length===0&&reset!==false){$('#journalEmpty').style.display='block';return;}
+  $('#journalEmpty').style.display='none';
+  res.data.forEach(function(item){
+    var isMe=item.role===state.role;
+    var displayName=isMe?'我':(state.partner?state.partner.nickname:'TA');
+    var time=new Date(item.created_at);
+    var ts=(time.getMonth()+1)+'月'+time.getDate()+'日 '+String(time.getHours()).padStart(2,'0')+':'+String(time.getMinutes()).padStart(2,'0');
+    var imgsHtml=item.images&&item.images.length?('<div class="journal-images">'+item.images.map(function(img){return '<img class="journal-img" src="'+img+'" onclick="window.open(\''+img+'\',\'_blank\')">';}).join('')+'</div>'):'';
+    var el=document.createElement('div'); el.className='timeline-item fade-in';
+    el.innerHTML='<div class="timeline-line"><div class="timeline-dot '+(isMe?'dot-me':'dot-partner')+'"></div><div class="timeline-connector"></div></div>'+
+      '<div class="journal-card card"><div class="journal-header"><div class="journal-author">'+(isMe?'葱':'蒜')+' '+displayName+
+      '<span class="'+(isMe?'tag-cong':'tag-suan')+'">'+(item.role==='cong'?'葱':'蒜')+'</span></div><span class="journal-time">'+ts+'</span></div>'+
+      (item.content?'<div class="journal-body">'+item.content.replace(/</g,'&lt;').replace(/>/g,'&gt;')+'</div>':'')+imgsHtml+'</div>';
+    if(reset!==false) $('#journalTimeline').appendChild(el);
+  });
+}
+
+window.addEventListener('scroll',function(){if($('#view-journal').classList.contains('active')&&journalHasMore){var st=document.documentElement.scrollTop,sh=document.documentElement.scrollHeight,ch=document.documentElement.clientHeight;if(st+ch>sh-200) loadJournals(false);}});
+
+var selectedImages=[];
+$('#openEditor').addEventListener('click',function(){if(!state.role){toast('请先在"我的"页面设置身份');return;}$('#editorOverlay').classList.add('show');$('#editorContent').value='';$('#charCount').textContent='0';$('#imagePreviewRow').innerHTML='';selectedImages=[];});
+$('#closeEditor').addEventListener('click',function(){$('#editorOverlay').classList.remove('show');});
+$('#editorOverlay').addEventListener('click',function(e){if(e.target===$('#editorOverlay')) $('#editorOverlay').classList.remove('show');});
+$('#editorContent').addEventListener('input',function(){$('#charCount').textContent=this.value.length;});
+$('#chooseImage').addEventListener('click',function(){$('#imageInput').click();});
+$('#imageInput').addEventListener('change',function(){var files=Array.from(this.files);files.forEach(function(file){var reader=new FileReader();reader.onload=function(e){selectedImages.push({file:file,preview:e.target.result});renderImagePreviews();};reader.readAsDataURL(file);});this.value='';});
+
+function renderImagePreviews(){$('#imagePreviewRow').innerHTML=selectedImages.map(function(img,i){return '<div class="image-preview-wrap"><img class="image-preview" src="'+img.preview+'"><span class="image-delete-btn" onclick="window._removeImage('+i+')">✕</span></div>';}).join('');}
+window._removeImage=function(i){selectedImages.splice(i,1);renderImagePreviews();};
+
+$('#publishJournal').addEventListener('click',async function(){
+  var content=$('#editorContent').value.trim();
+  if(!content&&selectedImages.length===0){toast('写点什么吧～');return;}
+  if(!supabase){toast('服务器未连接');return;}
+  $('#publishJournal').disabled=true;$('#publishJournal').textContent='发布中...';
+  var imageUrls=[];
+  for(var i=0;i<selectedImages.length;i++){
+    var img=selectedImages[i];
+    var filename='journals/'+Date.now()+'-'+Math.random().toString(36).slice(2,8)+'.jpg';
+    var upRes=await supabase.storage.from('journals').upload(filename,img.file);
+    if(!upRes.error){var purl=supabase.storage.from('journals').getPublicUrl(filename);imageUrls.push(purl.data.publicUrl);}
+  }
+  var insRes=await supabase.from('journals').insert({pair_code:state.pairCode,role:state.role,content:content,images:imageUrls});
+  $('#publishJournal').disabled=false;$('#publishJournal').textContent='📝 发布';
+  if(insRes.error){toast('发布失败');return;}
+  toast('发布成功！');$('#editorOverlay').classList.remove('show');loadJournals();
+});
+
+// 个人中心
+function renderProfile(){
+  var avatar=$('#profileAvatar');
+  if(state.role==='cong') avatar.textContent='🧅';
+  else if(state.role==='suan') avatar.textContent='🧄';
+  else avatar.textContent='💛';
+  $('#nicknameInput').value=state.nickname;
+  var tag=$('#roleTag');
+  if(state.role==='cong'){tag.textContent='🧅 我是葱';tag.className='role-tag cong';}
+  else if(state.role==='suan'){tag.textContent='🧄 我是蒜';tag.className='role-tag suan';}
+  else{tag.textContent='👆 选择身份';tag.className='role-tag';}
+  if(!state.role){$('#roleSelectCard').style.display='block';}else{$('#roleSelectCard').style.display='none';}
+  if(state.partner){
+    var pRole=state.partner.role;
+    $('#pairedInfo').innerHTML='<div class="partner-card"><div class="avatar-sm">'+(pRole==='cong'?'🧅':'🧄')+'</div><div><span class="partner-name">'+(state.partner.nickname||'TA')+'</span><span class="'+(pRole==='cong'?'tag-cong':'tag-suan')+'">'+(pRole==='cong'?'葱':'蒜')+'</span></div></div><div class="unpair-btn" onclick="unpair()">解除配对</div>';
+    $('#unpairedInfo').style.display='none';$('#pairedInfo').style.display='block';
+  }else{
+    $('#pairedInfo').style.display='none';$('#unpairedInfo').style.display='block';
+    $('#myPairCode').textContent=state.pairCode;
+    if(state.role){$('#pairCodeArea').style.display='block';}else{$('#pairCodeArea').style.display='none';}
+  }
+}
+
+$('#roleTag').addEventListener('click',function(){if(state.partner){toast('已配对，无法修改身份');return;}$('#roleSelectCard').style.display=$('#roleSelectCard').style.display==='none'?'block':'none';});
+$$('.role-option').forEach(function(btn){btn.addEventListener('click',function(){setRole(btn.dataset.role);});});
+$('#nicknameInput').addEventListener('blur',function(){state.nickname=this.value.trim();saveState();initOrGetUser();});
+$('#copyPairCode').addEventListener('click',function(){navigator.clipboard.writeText(state.pairCode).then(function(){toast('配对码已复制');})['catch'](function(){toast('复制失败');});});
+$('#doPair').addEventListener('click',doPair);
+
+function showModal(title,content,hasCancel,confirmText,cancelText){
+  return new Promise(function(resolve){
+    var overlay=document.createElement('div'); overlay.className='modal-overlay';
+    overlay.innerHTML='<div class="modal-box bounce-in"><div class="modal-title">'+title+'</div><div class="modal-content">'+content+'</div><div class="modal-actions">'+(hasCancel?'<button class="btn btn-ghost cancel">'+(cancelText||'取消')+'</button>':'')+'<button class="btn btn-primary confirm">'+(confirmText||'确定')+'</button></div></div>';
+    document.body.appendChild(overlay);
+    overlay.querySelector('.confirm').addEventListener('click',function(){overlay.remove();resolve(true);});
+    if(hasCancel) overlay.querySelector('.cancel').addEventListener('click',function(){overlay.remove();resolve(false);});
+    overlay.addEventListener('click',function(e){if(e.target===overlay){overlay.remove();resolve(false);}});
+  });
+}
+
+// 初始化
+async function init(){
+  if(!supabase){renderProfile();updateTimerDisplay();return;}
+  await initOrGetUser(); await loadPomodoroSettings();
+  renderCalendar(); renderProfile(); updateTimerDisplay();
+}
+
+if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js')['catch'](function(){});}
+
+// 页面就绪后启动
+if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){renderProfile();updateTimerDisplay();loadSupabase(init);});}
+else{renderProfile();updateTimerDisplay();loadSupabase(init);}
+
+})();
+</script>
 </body>
 </html>
