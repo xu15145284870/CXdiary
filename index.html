@@ -246,8 +246,8 @@
 const SUPABASE_URL = 'https://phmkjfxvpowbgtxaotir.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobWtqZnh2cG93Ymd0eGFvdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTM2MDksImV4cCI6MjA5ODIyOTYwOX0.4XCnkUoDZ1fBaAg-SILIrgay1c09fI4ZdKi25DHUZM4';
 
-if (typeof supabase === 'undefined') { alert('Supabase库加载失败！'); throw new Error('supabase not loaded'); }
-supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+supabase = window.supabase || (typeof supabase !== 'undefined' ? supabase : null);
+if (!supabase) { console.error('Supabase库加载失败'); } else { supabase = supabase.createClient(SUPABASE_URL, SUPABASE_KEY); }
 
 const state = {
   pairCode: localStorage.getItem('pairCode') || '',
