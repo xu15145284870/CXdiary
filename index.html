@@ -383,7 +383,9 @@ async function renderCalendar(){
   try{
   var year=state.year,month=state.month,ym=year+'-'+String(month+1).padStart(2,'0');
   var dm=$('#displayMonth'); if(dm) dm.textContent=year+'年 '+(month+1)+'月';
-  var res=await supabase.from('checkins').select('*').eq('pair_code',state.pairCode).like('date',ym+'-%');
+  var nextMon=month+1; var nextY=year; if(nextMon>11){nextMon=0;nextY++;}
+  var firstDay=ym+'-01', lastDay=nextY+'-'+String(nextMon+1).padStart(2,'0')+'-01';
+  var res=await supabase.from('checkins').select('*').eq('pair_code',state.pairCode).gte('date',firstDay).lt('date',lastDay);
   var checkins=res.data||[];
   var myChecks=checkins.filter(function(c){return c.role===state.role;});
   var partnerChecks=checkins.filter(function(c){return c.role!==state.role;});
