@@ -217,6 +217,10 @@
   <div class="toast" id="toast"></div>
 
   <script>
+    // 全局错误捕获
+    window.onerror = function(msg, url, line) {
+      document.body.innerHTML += '<div style="position:fixed;top:0;left:0;right:0;background:red;color:#fff;padding:10px;z-index:9999;font-size:12px">JS错误: '+msg+' (行'+line+')</div>';
+    };
     // 调试：确认页面能跑 JS
     document.addEventListener('DOMContentLoaded', function() {
       var t = document.querySelectorAll('.tab-item');
@@ -232,6 +236,6 @@
       });
     });
   </script>
-  <script src="./js/app.js" defer></script>
+  <script src="./js/app.js" defer onerror="document.body.innerHTML+='<div style=position:fixed;top:30px;left:0;right:0;background:red;color:#fff;padding:10px;z-index:9999>app.js 加载失败！</div>'"></script>
 </body>
 </html>
