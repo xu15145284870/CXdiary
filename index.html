@@ -241,6 +241,9 @@
 // 葱蒜的考研日记 — 内联版（不依赖外部文件）
 // ============================================
 (function(){
+// ===== 页面上色测试：JS若运行，背景短暂变绿 =====
+document.body.style.backgroundColor = '#c8f7c5';
+setTimeout(function(){ document.body.style.backgroundColor = ''; }, 500);
 
 const SUPABASE_URL = 'https://phmkjfxvpowbgtxaotir.supabase.co';
 const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBobWtqZnh2cG93Ymd0eGFvdGlyIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODI2NTM2MDksImV4cCI6MjA5ODIyOTYwOX0.4XCnkUoDZ1fBaAg-SILIrgay1c09fI4ZdKi25DHUZM4';
@@ -659,6 +662,10 @@ if('serviceWorker' in navigator){navigator.serviceWorker.register('./sw.js')['ca
 // 页面就绪后启动
 if(document.readyState==='loading'){document.addEventListener('DOMContentLoaded',function(){renderProfile();updateTimerDisplay();loadSupabase(init);});}
 else{renderProfile();updateTimerDisplay();loadSupabase(init);}
+
+// 暴露到全局（给 onclick 使用）
+window.unpair = unpair;
+window.doPair = doPair;
 
 })();
 </script>
