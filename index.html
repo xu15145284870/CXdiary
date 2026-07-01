@@ -379,9 +379,10 @@ async function unpair(){
 var EMOJIS=['😊','🥰','😆','😎','🤩','😇','💪','📚','✍️','🎯','🔥','⭐','😌','🧘','🍃','☕','🌙','🌸','😢','😤','😴','🤔','🥺','😅'];
 
 async function renderCalendar(){
-  if(!state.pairCode||!supabase) return;
+  if(!state.pairCode||!supabase){ console.warn('renderCalendar skipped',!!state.pairCode,!!supabase); return; }
+  try{
   var year=state.year,month=state.month,ym=year+'-'+String(month+1).padStart(2,'0');
-  $('#displayMonth').textContent=year+'年 '+(month+1)+'月';
+  var dm=$('#displayMonth'); if(dm) dm.textContent=year+'年 '+(month+1)+'月';
   var res=await supabase.from('checkins').select('*').eq('pair_code',state.pairCode).like('date',ym+'-%');
   var checkins=res.data||[];
   var myChecks=checkins.filter(function(c){return c.role===state.role;});
@@ -427,6 +428,7 @@ async function renderCalendar(){
   $('#statMyStreak').textContent='🔥 '+calcStreak(myDatesArr)+'天';
   $('#statPartnerStreak').textContent='🔥 '+calcStreak(partnerDatesArr)+'天';
   $('#statPartnerLabel').textContent=partnerLabel+'签了';
+  }catch(e){console.error('renderCalendar error:',e);}
 }
 
 // Emoji 选择器
